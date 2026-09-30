@@ -1,0 +1,13 @@
+# t3-worker: claude-swap switches Claude accounts before rate limits hit.
+# Installed as a systemd user unit for the service user (needs linger).
+[Unit]
+Description=claude-swap: automatischer Kontowechsel vor Rate-Limits
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/cswap auto --interval 120
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=default.target

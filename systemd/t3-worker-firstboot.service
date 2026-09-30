@@ -1,0 +1,17 @@
+[Unit]
+Description=t3-worker: Ersteinrichtung beim ersten Start (Repo holen, nicht-interaktive Phasen)
+Documentation=file:///opt/t3-worker/README.md
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/t3-worker/firstboot.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/t3-worker-firstboot
+ExecStartPost=/bin/sh -c 'mkdir -p /var/lib/t3-worker && touch /var/lib/t3-worker/firstboot.done'
+TimeoutStartSec=infinity
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

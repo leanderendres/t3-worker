@@ -1,0 +1,13 @@
+[Unit]
+Description=t3-worker: Samba und Cockpit nur aus LAN und Tailscale
+Before=network-pre.target smbd.service cockpit.socket
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/t3-worker/firewall.nft
+ExecStop=/usr/sbin/nft delete table inet t3worker
+
+[Install]
+WantedBy=multi-user.target

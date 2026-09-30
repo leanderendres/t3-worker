@@ -1,0 +1,11 @@
+[Unit]
+Description=t3-worker: tägliches Update von System und Werkzeugen
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/t3-worker/lib/tool-update.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

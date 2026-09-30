@@ -1,0 +1,62 @@
+# t3-worker Samba configuration, rendered by setup.sh (phase "samba").
+# Placeholders: @@USER@@ @@T7_PATH@@ @@TM_PATH@@ @@TM_QUOTA@@ @@LIB@@
+# Local changes are overwritten on the next setup run.
+
+[global]
+   server string = t3-worker
+   workgroup = WORKGROUP
+   server role = standalone server
+   map to guest = never
+   restrict anonymous = 2
+   disable netbios = yes
+   smb ports = 445
+   server min protocol = SMB2_10
+   # Only private ranges (LAN, Tailscale CGNAT/ULA); nftables enforces the same
+   hosts allow = 127. 10. 172.16.0.0/12 192.168. 169.254. 100.64.0.0/10 ::1 fe80::/10 fc00::/7
+   hosts deny = ALL
+   # Advertised via /etc/avahi/services/t3-worker-smb.service instead
+   multicast dns register = no
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+   logging = file
+
+   # macOS interoperability (Finder metadata, resource forks, Time Machine)
+   vfs objects = catia fruit streams_xattr
+   fruit:metadata = stream
+   fruit:model = MacSamba
+   fruit:posix_rename = yes
+   fruit:veto_appledouble = no
+   fruit:nfs_aces = no
+   fruit:wipe_intentionally_left_blank_rfork = yes
+   fruit:delete_empty_adfiles = yes
+   fruit:zero_file_id = yes
+   ea support = yes
+
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+
+[T7]
+   comment = Samsung T7 Shield (NTFS)
+   path = @@T7_PATH@@
+   valid users = @@USER@@
+   force user = @@USER@@
+   read only = no
+   browseable = yes
+   # Refuse connections while the T7 is not mounted (never write to the SSD)
+   root preexec = @@LIB@@/require-mount.sh @@T7_PATH@@
+   root preexec close = yes
+   fruit:resource = file
+
+[TimeMachine]
+   comment = Time Machine
+   path = @@TM_PATH@@
+   valid users = @@USER@@
+   force user = @@USER@@
+   read only = no
+   browseable = yes
+   root preexec = @@LIB@@/require-mount.sh @@TM_PATH@@
+   root preexec close = yes
+   fruit:time machine = yes
+   fruit:time machine max size = @@TM_QUOTA@@

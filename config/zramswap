@@ -1,0 +1,4 @@
+# t3-worker: compressed swap in RAM (zram-tools), no swap partition on the SSD
+ALGO=zstd
+PERCENT=50
+PRIORITY=100

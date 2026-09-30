@@ -1,0 +1,10 @@
+[Unit]
+Description=t3-worker: nächtliche Spiegelung T7 -> HDD
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/t3-worker/lib/t7-mirror.sh
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=12h

@@ -1,0 +1,10 @@
+[Unit]
+Description=t3-worker: T7-Spiegelung täglich um 02:30
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

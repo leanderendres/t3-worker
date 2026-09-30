@@ -1,0 +1,3 @@
+# t3-worker: let the unused NVIDIA GPU (no driver bound) enter runtime D3 to save power
+ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{class}=="0x030*", TEST=="power/control", ATTR{power/control}="auto"
+ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{class}=="0x040300", TEST=="power/control", ATTR{power/control}="auto"

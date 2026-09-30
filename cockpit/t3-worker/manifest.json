@@ -1,0 +1,18 @@
+{
+    "version": 0,
+    "requires": {
+        "cockpit": "300"
+    },
+    "content-security-policy": "style-src 'self' 'unsafe-inline'",
+    "menu": {
+        "index": {
+            "label": "t3-worker",
+            "order": 5,
+            "keywords": [
+                {
+                    "matches": ["t3", "status", "gesundheit", "t7", "time machine", "tailscale"]
+                }
+            ]
+        }
+    }
+}

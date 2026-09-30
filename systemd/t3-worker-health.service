@@ -1,0 +1,8 @@
+[Unit]
+Description=t3-worker: Gesundheitsprüfung und Selbstheilung
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/t3-worker/lib/health.sh
+Nice=5

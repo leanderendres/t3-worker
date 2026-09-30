@@ -1,0 +1,27 @@
+#!/usr/sbin/nft -f
+# t3-worker: Samba (139/445) and Cockpit (9090) only from loopback, Tailscale
+# and private LAN ranges. Everything else is left to the default policy.
+# Own table, so Docker's and Tailscale's rules stay untouched.
+table inet t3worker
+delete table inet t3worker
+
+table inet t3worker {
+    set lan4 {
+        type ipv4_addr
+        flags interval
+        elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10 }
+    }
+    set lan6 {
+        type ipv6_addr
+        flags interval
+        elements = { fe80::/10, fc00::/7 }
+    }
+    chain input {
+        type filter hook input priority filter - 10; policy accept;
+        iifname { "lo", "tailscale0" } accept
+        tcp dport { 139, 445, 9090 } ip saddr @lan4 accept
+        tcp dport { 139, 445, 9090 } ip6 saddr @lan6 accept
+        tcp dport { 139, 445, 9090 } drop
+        udp dport { 137, 138 } drop
+    }
+}
