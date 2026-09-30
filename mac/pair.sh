@@ -44,7 +44,7 @@ remote_check="$T3W_REMOTE_PATH command -v t3 >/dev/null || { echo 't3 fehlt auf 
 output=""
 if ((USE_TAILSCALE)); then
     info "Erzeuge Kopplungslink (t3 pair --tailscale) ..."
-    if ! output=$(t3w_remote "$remote_check t3 pair --tailscale" </dev/null 2>&1); then
+    if ! output=$(t3w_remote "$remote_check NO_COLOR=1 t3 pair --tailscale" </dev/null 2>&1); then
         warn "\"t3 pair --tailscale\" fehlgeschlagen; versuche \"t3 pair\"."
         printf '%s\n' "$output" | tail -n 5 | sed 's/^/   /' >&2
         output=""
@@ -52,13 +52,15 @@ if ((USE_TAILSCALE)); then
 fi
 if [[ -z "$output" ]]; then
     info "Erzeuge Kopplungslink (t3 pair) ..."
-    output=$(t3w_remote "$remote_check t3 pair" </dev/null 2>&1) || {
+    output=$(t3w_remote "$remote_check NO_COLOR=1 t3 pair" </dev/null 2>&1) || {
         printf '%s\n' "$output" >&2
         die "Kopplungslink konnte nicht erzeugt werden. Läuft der Dienst? Prüfen mit: $SCRIPT_DIR/status.sh"
     }
 fi
 
-link=$(printf '%s\n' "$output" | grep -Eo 'https?://[^[:space:]"<>]+' | tail -n 1 || true)
+# Strip ANSI colour codes first: a trailing escape sequence made the pasted link invalid.
+output=$(printf '%s\n' "$output" | LC_ALL=C sed -E $'s/\x1b\\[[0-9;]*[A-Za-z]//g')
+link=$(printf '%s\n' "$output" | LC_ALL=C grep -Eao 'https?://[A-Za-z0-9.:-]+/pair#token=[A-Za-z0-9_-]+' | tail -n 1 || true)
 if [[ -z "$link" ]]; then
     warn "Kein Link in der Ausgabe gefunden. Vollständige Ausgabe:"
     printf '%s\n' "$output"
