@@ -103,6 +103,9 @@ ensure_block() {
 
 # --- packages ---------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
+# The system locale is de_DE: keep decimal points (not commas) in numbers that
+# end up in JSON or arithmetic; messages stay German.
+export LC_NUMERIC=C
 APT_OPTS=(-y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
 
 pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
