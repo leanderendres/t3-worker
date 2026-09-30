@@ -289,7 +289,17 @@ if [ "$WIFI" = 1 ]; then
     SSID=${T3W_WIFI_SSID:-}
     PSK=${T3W_WIFI_PSK:-}
     [ -n "$SSID" ] || read -r -p "WLAN-Name (SSID): " SSID
-    [ -n "$PSK" ] || { read -r -s -p "WLAN-Passwort (WPA2/WPA3-Personal): " PSK; echo; }
+    if [ -z "$PSK" ]; then
+        # Typed blind, so ask twice: a typo would only show up as a failed
+        # key exchange in the installer.
+        while :; do
+            read -r -s -p "WLAN-Passwort (WPA2-Personal): " PSK; echo
+            read -r -s -p "WLAN-Passwort wiederholen: " psk2; echo
+            [ "$PSK" = "$psk2" ] && break
+            warn "Die Eingaben stimmen nicht überein, bitte noch einmal."
+        done
+        unset psk2
+    fi
     [ -n "$SSID" ] && [ ${#PSK} -ge 8 ] || die "SSID oder Passwort ungültig."
     WIFI_BLOCK=$(printf '%s\n' \
         "d-i netcfg/wireless_show_essids select manual" \
