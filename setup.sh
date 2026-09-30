@@ -59,7 +59,7 @@ describe_phase() {
         preflight) echo "Voraussetzungen und Hardware erkennen" ;;
         repo)      echo "Setup-Repo auf Git-Stand bringen" ;;
         base)      echo "Grundpakete aus Debian" ;;
-        system)    echo "Btrfs/Snapper, zram, Watchdog, Deckel, Updates, SSH, NVIDIA aus" ;;
+        system)    echo "Btrfs/Snapper, zram, Watchdog, Deckel, Updates, SSH, Netzwerk, NVIDIA aus" ;;
         repos)     echo "Docker, Tailscale, GitHub CLI, mise (offizielle Paketquellen)" ;;
         tools)     echo "Node LTS, pnpm, uv, claude-swap, Claude Code, T3 Code (als $T3W_USER)" ;;
         browser)   echo "Chromium und Playwright-Abhängigkeiten" ;;

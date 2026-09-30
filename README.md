@@ -42,6 +42,11 @@ pinned Debian CD keys when gpg is available), asks for the `leander` password
 boot entry `auto=true priority=critical preseed/file=/cdrom/preseed.cfg` for UEFI
 (GRUB) and BIOS (isolinux). It then writes the stick with `dd`.
 
+The Swift 3 has no Ethernet port. A USB Ethernet adapter (e.g. Realtek RTL8153)
+can be plugged in at any time, before or after the install, with or without
+`--wifi`: it gets DHCP automatically and is preferred over Wi-Fi (route metric
+100 vs. 600); Wi-Fi stays as the fallback. Booting never waits for a cable.
+
 The stick writer refuses internal disks, disks over 64 GB and anything with
 "T7" in its name, and you have to type the disk identifier to confirm. The built
 ISO contains the password hash (and the Wi-Fi password), so it is deleted after
@@ -134,8 +139,8 @@ change nothing), `--unattended`, `--phase NAME` (see `--list`). Log:
 
 | Area | Details |
 |---|---|
-| System | Debian 13 minimal, Btrfs root with snapper snapshots before/after every apt run (Debian's `/etc/apt/apt.conf.d/80snapper`; grub-btrfs is not in Debian 13, so no boot menu for snapshots), nested subvolumes for `/var/lib/docker`, `~/Sites`, `~/.cache` (kept out of snapshots), zram swap (zstd, 50 %), unattended-upgrades (security only, reboot only at 04:00), systemd hardware watchdog, lid switch ignored, suspend/hibernate masked, NVIDIA blacklisted, console blanks after 60 s |
-| Access | OpenSSH key-only, Tailscale with Tailscale SSH, avahi (`t3-worker.local`), Cockpit (socket-activated) |
+| System | Debian 13 minimal, network: Wi-Fi (or the install-time port) via ifupdown with metric 600 (wired 100), every other wired port incl. hotplugged USB Ethernet via systemd-networkd (DHCP, IPv6 RA, metric 100, not required for boot, `systemd-networkd-wait-online` masked, foreign routes of Tailscale/Docker left alone), Btrfs root with snapper snapshots before/after every apt run (Debian's `/etc/apt/apt.conf.d/80snapper`; grub-btrfs is not in Debian 13, so no boot menu for snapshots), nested subvolumes for `/var/lib/docker`, `~/Sites`, `~/.cache` (kept out of snapshots), zram swap (zstd, 50 %), unattended-upgrades (security only, reboot only at 04:00), systemd hardware watchdog, lid switch ignored, suspend/hibernate masked, NVIDIA blacklisted, console blanks after 60 s |
+| Access | OpenSSH key-only, Tailscale with Tailscale SSH, avahi (`t3-worker.local`), Cockpit (socket-activated); reachable over Wi-Fi and any wired/USB Ethernet link, the cable being preferred when plugged in |
 | Firewall | own nftables table: Samba (139/445) and Cockpit (9090) only from loopback, `tailscale0` and private ranges; nothing else is filtered |
 | Tools | Docker (official repo), git, gh, build-essential, mise with Node LTS and pnpm, uv, claude-swap, Claude Code (native installer), T3 Code CLI (`t3.codes/install.sh`), Chromium + Playwright system deps |
 | Storage | T7 via kernel `ntfs3` by UUID (`nofail`, no automount), HDD partitions by UUID; a T7 plugged in later is mounted by the health timer within 5 minutes; empty mount points are immutable, and Samba refuses a share whose disk is not mounted, so nothing lands on the SSD by mistake. A dirty NTFS volume is never repaired automatically (open item with instructions instead) |
