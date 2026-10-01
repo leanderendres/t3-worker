@@ -18,7 +18,7 @@ Script output is German, code and docs are English.
 | Laptop | Acer Swift 3 SF314-54G, i5-8250U, 8 GB RAM | host `t3-worker` |
 | SSD | SK hynix `HFS128G39TND-N210A` 128 GB SATA M.2 | Debian, repos (Btrfs + snapper) |
 | HDD | Toshiba `MQ04ABF100` 1 TB | ~600 GB Time Machine, ~400 GB T7 mirror |
-| External | Samsung T7 Shield 2 TB, NTFS, label `T7 Shield` | shared as `T7`, never formatted |
+| External | Samsung T7 Shield 2 TB, NTFS or exFAT (detected), label `T7 Shield` | shared as `T7`, never formatted |
 | GPU | NVIDIA MX150 | blacklisted, runtime power-down |
 
 The disk models are matched exactly; other hardware needs the constants in
@@ -143,8 +143,8 @@ change nothing), `--unattended`, `--phase NAME` (see `--list`). Log:
 | Access | OpenSSH key-only, Tailscale with Tailscale SSH, avahi (`t3-worker.local`), Cockpit (socket-activated); reachable over Wi-Fi and any wired/USB Ethernet link, the cable being preferred when plugged in |
 | Firewall | own nftables table: Samba (139/445) and Cockpit (9090) only from loopback, `tailscale0` and private ranges; nothing else is filtered |
 | Tools | Docker (official repo), git, gh, build-essential, mise with Node LTS and pnpm, uv, claude-swap, Claude Code (native installer), T3 Code CLI (`t3.codes/install.sh`), Chromium + Playwright system deps |
-| Storage | T7 via kernel `ntfs3` by UUID (`nofail`, no automount), HDD partitions by UUID; a T7 plugged in later is mounted by the health timer within 5 minutes; empty mount points are immutable, and Samba refuses a share whose disk is not mounted, so nothing lands on the SSD by mistake. A dirty NTFS volume is never repaired automatically (open item with instructions instead) |
-| Shares | `T7` (read/write) and `TimeMachine` (vfs_fruit, quota 540 GB) for user leander |
+| Storage | T7 by UUID with the kernel driver for its file system, read from the disk: `ntfs3` for NTFS, `exfat` for exFAT (`nofail`, no automount; exFAT also `noauto`, so only setup and the health timer mount it), HDD partitions by UUID; a T7 plugged in later is mounted by the health timer within 5 minutes; empty mount points are immutable, and Samba refuses a share whose disk is not mounted, so nothing lands on the SSD by mistake. A volume that was not cleanly removed is never repaired or mounted automatically (open item with instructions instead): `ntfs3` refuses a dirty NTFS volume by itself; the `exfat` driver would mount it, so the scripts first read the VolumeDirty flag in the boot sector (read-only) |
+| Shares | `T7` (read/write) and `TimeMachine` (vfs_fruit, quota 540 GB) for user leander. On an exFAT T7 the share runs without `streams_xattr` and EAs (exFAT has no extended attributes); macOS then stores Finder metadata in `._` files, as it does on exFAT locally |
 
 ### Timers
 
@@ -184,20 +184,23 @@ samba/smb.conf.tmpl        Samba configuration template
 cockpit/t3-worker/         Cockpit status page
 mac/                       Mac helpers: pair.sh, status.sh, push-accounts.sh
 tests/container-check.sh   local checks in a Debian 13 container
+tests/t7-detect.sh         T7 logic (NTFS/exFAT) with a stubbed blkid, no disk needed
 ```
 
 ## Testing
 
 `tests/container-check.sh` runs in a throwaway `debian:trixie` amd64 container:
 preseed syntax (`debconf-set-selections -c`), POSIX syntax of the installer
-helpers, `setup.sh --check`, `testparm` on the rendered Samba config,
-the unattended-upgrades origin override, `nft -c` on the firewall and
-`systemd-analyze verify` on the units. All scripts pass `shellcheck -x`.
+helpers, `setup.sh --check`, `testparm` on the rendered Samba config, T7
+detection for NTFS and exFAT with a stubbed `blkid` (fstab line, dirty flag on
+an image file), the unattended-upgrades origin override, `nft -c` on the
+firewall and `systemd-analyze verify` on the units. All scripts pass
+`shellcheck -x`.
 
 Only the real hardware can show: disk detection in the installer, Wi-Fi
 firmware, UEFI/Secure Boot on the Acer, the watchdog device, NVIDIA power-down,
-ntfs3 with the actual T7, Time Machine over SMB, Tailscale/T3 pairing and the
-systemd services and timers.
+ntfs3 or exfat with the actual T7, Finder on the exFAT share, Time Machine
+over SMB, Tailscale/T3 pairing and the systemd services and timers.
 
 ## License
 

@@ -9,6 +9,12 @@
 #   - the source is not empty
 #   - the source file count is at least 50 % of the last successful run
 #   - the source uses at most 95 % of the mirror filesystem size
+# The source is NTFS or exFAT, the mirror ext4. rsync -a needs nothing per type:
+# both drivers present every file with the mount's uid/gid/umask (copied as
+# shown), neither has symlinks or devices here, and no xattrs or ACLs are
+# requested (-X/-A). No --modify-window: that is for FAT's 2 s steps on the
+# receiving side; here ext4 stores exactly the mtime the driver reports (exFAT:
+# 10 ms steps, stable across mounts), and rsync compares whole seconds.
 # Result: $T3W_STATE/t7-mirror.json {finished, ok, reason, files, bytes, duration_s}
 #
 #   sudo /opt/t3-worker/lib/t7-mirror.sh             run

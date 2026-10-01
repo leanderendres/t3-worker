@@ -30,6 +30,7 @@ if [ -r "$STATUS" ] && command -v jq >/dev/null 2>&1; then
         "  T7:       " + (if .t7.mounted then "eingebunden"
                           elif .t7.present then "angeschlossen, nicht eingebunden"
                           else "nicht angeschlossen" end)
+          + ({"ntfs": " (NTFS)", "exfat": " (exFAT)"}[.t7.fstype // ""] // "")
           + (if (.mirror | type) == "object" and (.mirror.ok == false or .mirror.success == false)
              then ", letzte Spiegelung fehlgeschlagen" + (if .mirror.reason then " (" + .mirror.reason + ")" else "" end)
              else "" end),

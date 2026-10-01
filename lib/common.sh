@@ -209,12 +209,63 @@ find_disk_by_model() {
     printf '%s\n' "${hits[0]}"
 }
 
-# find_t7: print the partition device of the NTFS volume labelled $T7_LABEL
+# The T7 is NTFS or exFAT (whatever the owner formatted it with); the scripts
+# read the type from the disk and accept exactly these two.
+
+# t7_fstype DEV: print "ntfs" or "exfat"; fails for any other file system
+t7_fstype() {
+    local type
+    type=$(blkid -s TYPE -o value "$1" 2>/dev/null) || return 1
+    case "$type" in ntfs|exfat) printf '%s\n' "$type" ;; *) return 1 ;; esac
+}
+
+# find_t7: print the partition device of the NTFS or exFAT volume labelled $T7_LABEL
+# (blkid accepts only one -t, so the type is checked per candidate)
 find_t7() {
     local dev
-    dev=$(blkid -t LABEL="$T7_LABEL" -t TYPE=ntfs -o device 2>/dev/null | head -n1)
-    [ -n "$dev" ] || return 1
-    printf '%s\n' "$dev"
+    while IFS= read -r dev; do
+        [ -n "$dev" ] || continue
+        t7_fstype "$dev" >/dev/null || continue
+        printf '%s\n' "$dev"
+        return 0
+    done < <(blkid -t LABEL="$T7_LABEL" -o device 2>/dev/null)
+    return 1
+}
+
+# t7_fs_name TYPE: file system name as shown to the owner
+t7_fs_name() {
+    case "$1" in ntfs) echo NTFS ;; exfat) echo exFAT ;; *) echo "NTFS oder exFAT" ;; esac
+}
+
+# exfat_volume_state DEV: print "clean", "dirty" or "unknown". Only reads the main
+# boot sector: file system name at offset 3, VolumeFlags at offset 106 with bit 1 =
+# VolumeDirty (exFAT specification 3.1.13). exfatprogs has no command that prints
+# this flag: dump.exfat omits it and fsck.exfat -n reports a flagged volume as clean.
+exfat_volume_state() {
+    local sig flags
+    sig=$(od -An -c -j3 -N8 "$1" 2>/dev/null | tr -d ' \n')
+    flags=$(od -An -tu1 -j106 -N1 "$1" 2>/dev/null | tr -d ' \n')
+    if [ "$sig" != EXFAT ] || ! [[ "$flags" =~ ^[0-9]+$ ]]; then
+        echo unknown
+    elif [ $((flags & 2)) -ne 0 ]; then
+        echo dirty
+    else
+        echo clean
+    fi
+}
+
+# t7_mount_refusal DEV: print the reason (German) and return 0 if DEV must not be
+# mounted. A volume that was not cleanly removed is never mounted or repaired by
+# these scripts. NTFS needs no check here: ntfs3 itself refuses a dirty volume
+# (no "force" option in fstab). The exFAT driver would mount it read/write and
+# only log a warning, hence the look at the flag before every mount.
+t7_mount_refusal() {
+    [ "$(t7_fstype "$1" 2>/dev/null)" = exfat ] || return 1
+    case "$(exfat_volume_state "$1")" in
+        clean) return 1 ;;
+        dirty) echo "exFAT nicht sauber getrennt (Volume als fehlerhaft markiert)" ;;
+        *) echo "exFAT-Zustand von $1 nicht lesbar" ;;
+    esac
 }
 
 # --- state ------------------------------------------------------------------------

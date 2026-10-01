@@ -1,5 +1,6 @@
 # t3-worker Samba configuration, rendered by setup.sh (phase "samba").
-# Placeholders: @@USER@@ @@T7_PATH@@ @@TM_PATH@@ @@TM_QUOTA@@ @@LIB@@
+# Placeholders: @@USER@@ @@T7_PATH@@ @@T7_FS@@ @@T7_VFS@@ @@T7_EA@@ @@TM_PATH@@
+#               @@TM_QUOTA@@ @@LIB@@
 # Local changes are overwritten on the next setup run.
 
 [global]
@@ -38,7 +39,7 @@
    disable spoolss = yes
 
 [T7]
-   comment = Samsung T7 Shield (NTFS)
+   comment = Samsung T7 Shield (@@T7_FS@@)
    path = @@T7_PATH@@
    valid users = @@USER@@
    force user = @@USER@@
@@ -48,6 +49,10 @@
    root preexec = @@LIB@@/require-mount.sh @@T7_PATH@@
    root preexec close = yes
    fruit:resource = file
+   # Per file system (see samba_render): NTFS keeps streams in xattrs; exFAT has
+   # none, so no streams module and no EAs, macOS then writes ._ files itself
+   vfs objects = @@T7_VFS@@
+   ea support = @@T7_EA@@
 
 [TimeMachine]
    comment = Time Machine

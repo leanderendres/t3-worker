@@ -147,8 +147,9 @@ function renderDisks(s) {
 function renderT7(s) {
     const dl = clear($("t7"));
     const t7 = s.t7 || {};
-    row(dl, "T7 Shield", t7.mounted ? "angeschlossen und eingebunden"
-        : t7.present ? "angeschlossen, nicht eingebunden" : "nicht angeschlossen");
+    const fs = { ntfs: " (NTFS)", exfat: " (exFAT)" }[t7.fstype] || "";
+    row(dl, "T7 Shield", t7.mounted ? "angeschlossen und eingebunden" + fs
+        : t7.present ? "angeschlossen, nicht eingebunden" + fs : "nicht angeschlossen");
     const m = jobSummary(s.mirror);
     row(dl, "Letzte Spiegelung", m ? m.text : "noch nicht gelaufen");
     row(dl, "Zeitplan", "täglich 02:30, wenn die T7 angeschlossen ist");

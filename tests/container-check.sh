@@ -36,19 +36,25 @@ useradd -m -s /bin/bash leander
 grep -c "\[Plan\]" /tmp/check.log | xargs -I{} printf "%-48s %s\n" "  geplante Aktionen" "{}"
 cp /tmp/check.log /tmp/check-output.log
 
+# 3b. T7 logic for NTFS and exFAT without a disk (stubbed blkid, temp fstab)
+bash tests/t7-detect.sh >/tmp/t7.log 2>&1 && result "T7-Erkennung (NTFS/exFAT), ohne Pakete" OK || { cat /tmp/t7.log; result "T7-Erkennung" FEHLER; exit 1; }
+
 [ "$QUICK" = 1 ] && exit 0
 
 # 4. Config files against real Debian packages
 export DEBIAN_FRONTEND=noninteractive
 apt-get -qq update >/dev/null
-apt-get -qq install -y --no-install-recommends samba nftables unattended-upgrades systemd jq util-linux mount >/dev/null
+apt-get -qq install -y --no-install-recommends samba nftables unattended-upgrades systemd jq util-linux mount exfatprogs >/dev/null
 
 T3W_ROOT=/opt/t3-worker
 sed -e "s|@@USER@@|leander|g" -e "s|@@T7_PATH@@|/srv/t7|g" -e "s|@@TM_PATH@@|/srv/timemachine|g" \
+    -e "s|@@T7_FS@@|exFAT|g" -e "s|@@T7_VFS@@|catia fruit|g" -e "s|@@T7_EA@@|no|g" \
     -e "s|@@TM_QUOTA@@|540G|g" -e "s|@@LIB@@|$T3W_ROOT/lib|g" samba/smb.conf.tmpl >/tmp/smb.conf
 mkdir -p /srv/t7 /srv/timemachine
 testparm -s /tmp/smb.conf >/tmp/testparm.log 2>&1 && result "testparm smb.conf" OK || { cat /tmp/testparm.log; result "testparm" FEHLER; }
 grep -iE "unknown|error|ignoring" /tmp/testparm.log || true
+# again with real tools: mkfs.exfat image for the dirty flag, testparm per file system
+bash tests/t7-detect.sh >/tmp/t7.log 2>&1 && result "T7-Erkennung mit mkfs.exfat und testparm" "OK ($(grep -c "OK$" /tmp/t7.log) Prüfungen)" || { cat /tmp/t7.log; result "T7-Erkennung" FEHLER; }
 for m in fruit streams_xattr catia; do
     ls /usr/lib/x86_64-linux-gnu/samba/vfs/$m.so >/dev/null 2>&1 && result "Samba VFS-Modul $m" vorhanden || result "Samba VFS-Modul $m" FEHLT
 done

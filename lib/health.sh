@@ -225,7 +225,7 @@ strings_json() { # strings_json STR...: JSON array of strings
 # --- checks ---------------------------------------------------------------------------------------
 main() {
     local ts_state ts_backend t3 docker smbd cockpit t7_present=false t7_mounted=false
-    local pending=() f d disks=() ok=true pct
+    local pending=() f d disks=() ok=true pct t7_dev t7_fs='' t7_reason
 
     state_dir
 
@@ -252,11 +252,15 @@ main() {
     check_unit cockpit cockpit.socket "Cockpit-Socket"; cockpit=$ST
     [ "$cockpit" = active ] || PROBLEMS+=("Cockpit: $(state_de "$cockpit")")
 
-    # T7: present but not mounted -> mount it from fstab
-    if find_t7 >/dev/null 2>&1; then
+    # T7: present but not mounted -> mount it from fstab, unless the volume was
+    # not cleanly removed (never mounted or repaired automatically)
+    if t7_dev=$(find_t7 2>/dev/null); then
         t7_present=true
+        t7_fs=$(t7_fstype "$t7_dev" || true)
         if mountpoint -q "$T7_PATH" 2>/dev/null; then
             t7_mounted=true
+        elif t7_reason=$(t7_mount_refusal "$t7_dev"); then
+            PROBLEMS+=("T7 wird nicht eingebunden: $t7_reason. Anleitung: sudo t3-worker-setup --phase storage")
         elif ensure_mounted "$T7_PATH" "T7"; then
             dry || t7_mounted=true
         else
@@ -297,6 +301,7 @@ main() {
         --arg ts "$ts_state" --arg ts_backend "$ts_backend" --arg t3 "$t3" \
         --arg docker "$docker" --arg smbd "$smbd" --arg cockpit "$cockpit" \
         --argjson t7_present "$t7_present" --argjson t7_mounted "$t7_mounted" \
+        --arg t7_fstype "$t7_fs" \
         --argjson mirror "$(json_or_null "$T3W_STATE/t7-mirror.json")" \
         --argjson tool_update "$(json_or_null "$T3W_STATE/tool-update.json")" \
         --argjson pending "$(strings_json "${pending[@]}")" \
@@ -320,7 +325,7 @@ main() {
                 tailscale_state: (if $ts_backend == "null" then null else $ts_backend end),
                 t3: $t3, docker: $docker, smbd: $smbd, cockpit: $cockpit
             },
-            t7: {present: $t7_present, mounted: $t7_mounted},
+            t7: {present: $t7_present, mounted: $t7_mounted, fstype: (if $t7_fstype == "" then null else $t7_fstype end)},
             mirror: $mirror,
             tool_update: $tool_update,
             pending: $pending,

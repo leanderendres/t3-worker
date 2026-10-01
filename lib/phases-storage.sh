@@ -2,7 +2,7 @@
 # shellcheck disable=SC2153  # CHANGED, constants and helpers come from lib/common.sh
 # setup.sh phases: storage, samba. Sourced by setup.sh.
 #
-# Safety: the Samsung T7 (NTFS, label $T7_LABEL) holds the only copy of the owner's
+# Safety: the Samsung T7 (NTFS or exFAT, label $T7_LABEL) holds the only copy of the owner's
 # data. Nothing in here ever writes to it: it is only detected (blkid) and mounted.
 # Destructive commands (parted, mkfs) only ever target the internal HDD, and only
 # after storage_hdd_guard passed twice and the owner typed "FORMAT <sdX>".
@@ -248,11 +248,45 @@ storage_mount() {
     return 1
 }
 
+# storage_t7_fstab UUID FSTYPE UID GID: fstab line for the T7, kernel driver per
+# file system. Both show every file as owned by the service user (neither stores
+# Unix owners here). windows_names exists only in ntfs3. exFAT gets noauto: the
+# exfat driver mounts a volume that was not cleanly removed, so boot must not
+# mount it unchecked; setup and the health timer do it after t7_mount_refusal.
+storage_t7_fstab() {
+    local own="uid=$3,gid=$4,umask=002,iocharset=utf8" tail="nofail,x-systemd.device-timeout=10s 0 0"
+    case "$2" in
+        ntfs) printf '%s\n' "UUID=$1 $T7_PATH ntfs3 $own,windows_names,noatime,$tail" ;;
+        exfat) printf '%s\n' "UUID=$1 $T7_PATH exfat $own,noatime,noauto,$tail" ;;
+        *) return 1 ;;
+    esac
+}
+
+# storage_fstab_retire FILE MOUNTPOINT: comment out active entries for MOUNTPOINT
+# outside the managed block (e.g. a hand-written line with another type or UUID),
+# so the managed entry is the only one for that mount point.
+storage_fstab_retire() {
+    local file=$1 tmp
+    CHANGED=0
+    [ -f "$file" ] || return 0
+    tmp=$(mktemp)
+    awk -v m="$2" '
+        /^# >>> t3-worker storage >>>$/ { skip = 1 }
+        /^# <<< t3-worker storage <<<$/ { skip = 0 }
+        !skip && $1 !~ /^#/ && $2 == m { print "# t3-worker (ersetzt): " $0; next }
+        { print }' "$file" >"$tmp"
+    install_file "$tmp" "$file" "$(stat -c %a "$file")"
+    rm -f "$tmp"
+}
+
 phase_storage() {
-    local TM_UUID MIRROR_UUID T7_UUID t7 uid gid fstab='' changed=0
+    local TM_UUID MIRROR_UUID T7_UUID T7_FSTYPE t7 uid gid line fstab='' changed=0
     TM_UUID=$(storage_env_get TM_UUID)
     MIRROR_UUID=$(storage_env_get MIRROR_UUID)
     T7_UUID=$(storage_env_get T7_UUID)
+    T7_FSTYPE=$(storage_env_get T7_FSTYPE)
+    # written by a version that knew only NTFS
+    [ -z "$T7_UUID" ] || [ -n "$T7_FSTYPE" ] || T7_FSTYPE=ntfs
 
     say "Interne HDD"
     storage_hdd
@@ -260,7 +294,8 @@ phase_storage() {
     say "Samsung T7"
     if t7=$(find_t7); then
         T7_UUID=$(blkid -s UUID -o value "$t7" 2>/dev/null || true)
-        ok "T7 ($T7_LABEL): $t7${T7_UUID:+ (UUID $T7_UUID)}"
+        T7_FSTYPE=$(t7_fstype "$t7" || true)
+        ok "T7 ($T7_LABEL): $t7, $(t7_fs_name "$T7_FSTYPE")${T7_UUID:+ (UUID $T7_UUID)}"
     else
         t7=''
         warn "T7 ($T7_LABEL) nicht angeschlossen."
@@ -272,16 +307,21 @@ phase_storage() {
 TM_UUID=${TM_UUID}
 MIRROR_UUID=${MIRROR_UUID}
 T7_UUID=${T7_UUID}
+T7_FSTYPE=${T7_FSTYPE}
 EOF
 
     uid=$(id -u "$T3W_USER" 2>/dev/null || echo 1000)
     gid=$(id -g "$T3W_USER" 2>/dev/null || echo 1000)
     [ -z "$TM_UUID" ] || fstab+="UUID=$TM_UUID $TM_PATH ext4 defaults,noatime,nofail,x-systemd.device-timeout=15s 0 2"$'\n'
     [ -z "$MIRROR_UUID" ] || fstab+="UUID=$MIRROR_UUID $MIRROR_PATH ext4 defaults,noatime,nofail,x-systemd.device-timeout=15s 0 2"$'\n'
-    [ -z "$T7_UUID" ] || fstab+="UUID=$T7_UUID $T7_PATH ntfs3 uid=$uid,gid=$gid,umask=002,iocharset=utf8,windows_names,noatime,nofail,x-systemd.device-timeout=10s 0 0"$'\n'
+    if [ -n "$T7_UUID" ] && line=$(storage_t7_fstab "$T7_UUID" "$T7_FSTYPE" "$uid" "$gid"); then
+        fstab+="$line"$'\n'
+        storage_fstab_retire /etc/fstab "$T7_PATH"
+        changed=$CHANGED
+    fi
     if [ -n "$fstab" ]; then
         ensure_block /etc/fstab "t3-worker storage" <<<"${fstab%$'\n'}"
-        changed=$CHANGED
+        [ "$CHANGED" = 1 ] && changed=1
     fi
     [ "$changed" = 1 ] && svc daemon-reload
 
@@ -310,32 +350,61 @@ EOF
     fi
 
     if [ -n "$t7" ]; then
-        local other
+        local other reason fs
+        fs=$(t7_fs_name "$T7_FSTYPE")
         other=$(findmnt -rno TARGET "$t7" 2>/dev/null | grep -vxF "$T7_PATH" | head -n1 || true)
         if [ -n "$other" ]; then
             warn "T7 ist bereits unter $other eingehängt."
             pending_set t7 "T7 ist unter $other eingehängt statt unter $T7_PATH: sudo umount '$other', dann sudo t3-worker-setup --phase storage"
+        elif mountpoint -q "$T7_PATH" 2>/dev/null; then
+            ok "T7 eingehängt: $T7_PATH"
+            pending_clear t7
+        # Never repair automatically: this volume holds the only copy of the data.
+        elif reason=$(t7_mount_refusal "$t7"); then
+            warn "T7 wird nicht eingehängt: $reason. Es wird nichts repariert."
+            pending_set t7 "T7 wird nicht eingehängt: $reason. T7 an den Mac anschließen, im Festplattendienstprogramm 'Erste Hilfe' ausführen und sauber auswerfen (Windows: 'chkdsk X: /f'), danach wieder anstecken und sudo t3-worker-setup --phase storage. Nur zur Prüfung ohne Änderungen: sudo fsck.exfat -n $t7"
         elif storage_mount "$T7_PATH" "T7"; then
             pending_clear t7
-        else
-            # Never repair automatically: this volume holds the only copy of the data.
+        elif [ "$T7_FSTYPE" = ntfs ]; then
             warn "T7 ließ sich nicht einhängen (NTFS vermutlich nicht sauber getrennt). Es wird nichts repariert."
             pending_set t7 "T7 ließ sich nicht einhängen (NTFS nicht sauber getrennt). T7 an einen Windows-PC anschließen und dort 'chkdsk X: /f' ausführen (X: = Laufwerksbuchstabe der T7), danach wieder anstecken und sudo t3-worker-setup --phase storage. Nur zur Prüfung ohne Änderungen: sudo ntfsfix -n $t7"
+        else
+            warn "T7 ($fs) ließ sich nicht einhängen. Es wird nichts repariert."
+            pending_set t7 "T7 ($fs) ließ sich nicht einhängen. Ursache: sudo journalctl -k -b | grep -i exfat. Nur zur Prüfung ohne Änderungen: sudo fsck.exfat -n $t7. Danach sudo t3-worker-setup --phase storage"
         fi
     fi
 }
 
 # --- samba: shares T7 and TimeMachine for the Mac -----------------------------------
+# samba_render: print smb.conf from the template. The T7 share follows the file
+# system found by the storage phase. exFAT has no extended attributes, and with
+# streams_xattr on such a volume even a rename fails (NT_STATUS_NOT_SUPPORTED).
+# Without a streams module the share does not announce named streams and macOS
+# keeps its metadata in ._ files, as it does on exFAT locally. Unknown type: the
+# variant that works on both.
+samba_render() {
+    local t7_type t7_vfs t7_ea
+    t7_type=$(storage_env_get T7_FSTYPE)
+    case "$t7_type" in
+        ntfs) t7_vfs="catia fruit streams_xattr" t7_ea=yes ;;
+        *) t7_vfs="catia fruit" t7_ea=no ;;
+    esac
+    sed -e "s|@@USER@@|$T3W_USER|g" \
+        -e "s|@@T7_PATH@@|$T7_PATH|g" \
+        -e "s|@@T7_FS@@|$(t7_fs_name "$t7_type")|g" \
+        -e "s|@@T7_VFS@@|$t7_vfs|g" \
+        -e "s|@@T7_EA@@|$t7_ea|g" \
+        -e "s|@@TM_PATH@@|$TM_PATH|g" \
+        -e "s|@@TM_QUOTA@@|$TM_QUOTA|g" \
+        -e "s|@@LIB@@|$T3W_ROOT/lib|g" \
+        "$T3W_ROOT/samba/smb.conf.tmpl"
+}
+
 phase_samba() {
     apt_install samba
     local tmp restart=0
     tmp=$(mktemp)
-    sed -e "s|@@USER@@|$T3W_USER|g" \
-        -e "s|@@T7_PATH@@|$T7_PATH|g" \
-        -e "s|@@TM_PATH@@|$TM_PATH|g" \
-        -e "s|@@TM_QUOTA@@|$TM_QUOTA|g" \
-        -e "s|@@LIB@@|$T3W_ROOT/lib|g" \
-        "$T3W_ROOT/samba/smb.conf.tmpl" >"$tmp"
+    samba_render >"$tmp"
     if grep -q '@@[A-Z0-9_]*@@' "$tmp"; then
         rm -f "$tmp"
         die "smb.conf.tmpl enthält unbekannte Platzhalter."
