@@ -36,7 +36,10 @@ phase_tailscale() {
     svc enable --now tailscaled.service
     local st flags
     st=$(ts_state)
-    flags=(--ssh "--hostname=$T3W_HOSTNAME" "--operator=$T3W_USER")
+    # --accept-dns=false: dhcpcd rewrites /etc/resolv.conf with every router advertisement and
+    # Tailscale wrote it back each time; in between its forwarder had no upstream and every
+    # lookup failed. Nothing on this machine needs tailnet names, so the system resolver stays.
+    flags=(--ssh "--hostname=$T3W_HOSTNAME" "--operator=$T3W_USER" --accept-dns=false)
     say "Tailscale-Status: ${st:-unbekannt}"
 
     if [ "$st" = Running ]; then
