@@ -1,0 +1,12 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- t3-worker: the icon macOS shows for this machine. Cosmetic; kept apart from
+     avahi-smb.service so a name collision here cannot take the shares down. -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=TimeCapsule8,119</txt-record>
+  </service>
+</service-group>

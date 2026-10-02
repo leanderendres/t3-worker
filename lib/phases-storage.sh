@@ -430,6 +430,7 @@ phase_samba() {
     [ -x "$T3W_ROOT/lib/require-mount.sh" ] || run chmod 0755 "$T3W_ROOT/lib/require-mount.sh"
 
     install_file "$T3W_ROOT/config/avahi-smb.service" /etc/avahi/services/t3-worker-smb.service 0644
+    install_file "$T3W_ROOT/config/avahi-device.service" /etc/avahi/services/t3-worker-device.service 0644
 
     svc enable smbd
     if [ "$restart" = 1 ]; then svc restart smbd; else svc start smbd; fi

@@ -1,16 +1,14 @@
 <?xml version="1.0" standalone='no'?>
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
-<!-- t3-worker: advertise SMB and the Time Machine share to macOS -->
+<!-- t3-worker: advertise SMB and the Time Machine share to macOS.
+     The device icon lives in its own file (avahi-device.service): avahi drops a
+     whole group when one of its services collides, and without _adisk macOS
+     offers no Time Machine destination. -->
 <service-group>
   <name replace-wildcards="yes">%h</name>
   <service>
     <type>_smb._tcp</type>
     <port>445</port>
-  </service>
-  <service>
-    <type>_device-info._tcp</type>
-    <port>0</port>
-    <txt-record>model=TimeCapsule8,119</txt-record>
   </service>
   <service>
     <type>_adisk._tcp</type>
