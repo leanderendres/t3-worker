@@ -234,7 +234,7 @@ phase_agenthome() {
     fi
 
     local u src dst
-    for u in agent-home-sync.service agent-home-sync.timer; do
+    for u in agent-home-sync.service agent-home-sync.timer devsrv-reap.service devsrv-reap.timer; do
         src=$repo/platform/linux/$u
         dst=$home/.config/systemd/user/$u
         if [ "$(readlink "$dst" 2>/dev/null)" = "$src" ]; then
@@ -244,7 +244,8 @@ phase_agenthome() {
     done
     run user_systemctl daemon-reload
     run user_systemctl enable --now agent-home-sync.timer
-    ok "agent-home verlinkt, stündlicher Abgleich aktiv (agent-home-sync.timer)"
+    run user_systemctl enable --now devsrv-reap.timer
+    ok "agent-home verlinkt, stündlicher Abgleich aktiv (agent-home-sync.timer), verwaiste Dev-Server werden alle 10 min beendet (devsrv-reap.timer)"
 
     if [ -n "$(ls -A "$home/.agents/skills" 2>/dev/null)" ]; then
         pending_clear skills

@@ -14,6 +14,9 @@ set -uo pipefail
 RESTART_LIMIT=${RESTART_LIMIT:-3}       # restarts per service ...
 RESTART_WINDOW=${RESTART_WINDOW:-3600}  # ... within this many seconds
 DISK_WARN_PCT=${DISK_WARN_PCT:-90}
+MEM_WARN_PCT=${MEM_WARN_PCT:-10}          # problem when MemAvailable is below this share ...
+SWAP_WARN_PCT=${SWAP_WARN_PCT:-80}        # ... and swap is at least this full
+PAIRING_WARN_DAYS=${PAIRING_WARN_DAYS:-7} # warn this long before the Mac's T3 session expires
 
 ST=''         # result of check_unit/check_t3
 REPAIRS=()   # German texts: what was repaired (or could not be)
@@ -145,6 +148,23 @@ check_t3() { # result in ST
             fi
             ;;
     esac
+}
+
+# t3_pairing: expiry (ISO) of the latest-expiring live desktop session paired via
+# "t3 pair", empty if none. Reads T3's own database read-only; no secrets leave it.
+t3_pairing() {
+    local db
+    db="$(user_home)/.t3/userdata/state.sqlite"
+    [ -r "$db" ] && command -v python3 >/dev/null 2>&1 || return 0
+    python3 - "$db" <<'PY' 2>/dev/null || true
+import sqlite3, sys
+from datetime import datetime, timezone
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+c = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True, timeout=5)
+r = c.execute("select max(expires_at) from auth_sessions where client_surface = 'desktop' "
+              "and revoked_at is null and expires_at > ?", (now,)).fetchone()
+print(r[0] or "")
+PY
 }
 
 # --- disks ---------------------------------------------------------------------------------
@@ -279,6 +299,27 @@ main() {
         pct=$(jq -r '.used_pct // 0' <<<"${disks[-1]}")
         [ "$pct" -ge "$DISK_WARN_PCT" ] && PROBLEMS+=("Speicher fast voll: $d ($pct %)")
     done
+
+    # Memory: full RAM plus full swap made the T3 connection drop (19 orphaned wrangler dev)
+    local mem_total mem_avail swap_total swap_free swap_pct
+    mem_total=$(meminfo_mb MemTotal); mem_avail=$(meminfo_mb MemAvailable)
+    swap_total=$(meminfo_mb SwapTotal); swap_free=$(meminfo_mb SwapFree)
+    swap_pct=0
+    [ "$swap_total" -gt 0 ] && swap_pct=$(( 100 * (swap_total - swap_free) / swap_total ))
+    if [ "$mem_total" -gt 0 ] && [ $(( 100 * mem_avail / mem_total )) -lt "$MEM_WARN_PCT" ] \
+        && [ "$swap_pct" -ge "$SWAP_WARN_PCT" ]; then
+        PROBLEMS+=("Arbeitsspeicher knapp: $mem_avail MB frei, Auslagerung $swap_pct % voll (devsrv ls, ps -eo rss,args --sort=-rss)")
+    fi
+
+    # T3 pairing: an active desktop session clears the marker; warn before it expires
+    local pairing
+    pairing=$(t3_pairing)
+    if [ -n "$pairing" ]; then
+        pending_clear t3pair
+        if [ "$(date -d "$pairing" +%s 2>/dev/null || echo 0)" -lt $((NOW + PAIRING_WARN_DAYS * 86400)) ]; then
+            pending+=("T3-Kopplung des Macs läuft am $(date -d "$pairing" '+%d.%m. %H:%M') ab: am Mac mac/pair.sh ausführen")
+        fi
+    fi
 
     for f in "$T3W_STATE"/pending/*; do
         [ -f "$f" ] && pending+=("$(cat "$f")")
