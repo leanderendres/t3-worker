@@ -1,0 +1,7 @@
+# t3-worker: stop the largest expendable process before memory runs out.
+# Without this the machine thrashes in zram for hours (swap 100 %, a few hundred MB
+# free) and freezes: sshd, Tailscale and Cockpit stop answering, but the kernel and
+# systemd keep petting the watchdog, so nothing reboots (2026-10-15).
+# Acts when available RAM < 5 % and free swap < 10 % (SIGTERM; SIGKILL at half that).
+# Names are matched against the process name (comm).
+EARLYOOM_ARGS="-m 5 -s 10 -r 3600 --prefer '^(chromium|chrome|headless_shell|blender|workerd|wrangler|esbuild|vite)$' --avoid '^(init|systemd|systemd-journal|systemd-logind|sshd|sshd-session|tailscaled|t3|dockerd|containerd|cockpit-ws|cockpit-bridge|smbd|earlyoom|Xvfb)$'"

@@ -97,6 +97,7 @@ BASE_PACKAGES=(
     btrfs-progs snapper zram-tools nftables
     unattended-upgrades apt-listchanges
     smartmontools parted gdisk ntfs-3g exfatprogs lm-sensors
+    earlyoom
 )
 
 phase_base() {
@@ -259,12 +260,15 @@ phase_system() {
         warn "Root ist $rootfs, nicht Btrfs: Snapper wird übersprungen"
     fi
 
-    say "zram-Swap und Kernel-Parameter"
+    say "zram-Swap, Speicherschutz (earlyoom) und Kernel-Parameter"
     install_file "$T3W_ROOT/config/zramswap" /etc/default/zramswap
     [ "$CHANGED" = 1 ] && svc restart zramswap.service
     svc enable zramswap.service
     install_file "$T3W_ROOT/config/sysctl-t3-worker.conf" /etc/sysctl.d/90-t3-worker.conf
     [ "$CHANGED" = 1 ] && run sysctl -q --system
+    install_file "$T3W_ROOT/config/earlyoom" /etc/default/earlyoom
+    [ "$CHANGED" = 1 ] && svc restart earlyoom.service
+    svc enable earlyoom.service
 
     say "Immer an: Deckel, Suspend, Watchdog"
     install_file "$T3W_ROOT/config/logind-t3-worker.conf" /etc/systemd/logind.conf.d/t3-worker.conf
