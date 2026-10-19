@@ -124,6 +124,10 @@ change nothing), `--unattended`, `--phase NAME` (see `--list`). Log:
 - T3 Code: Settings → Connections → Add environment → paste the pairing link
   (`mac/pair.sh` fetches a fresh one over SSH). Tailnet HTTPS certificates must be
   enabled in the Tailscale admin console for `t3 pair --tailscale`.
+- The Mac app must be on the same major line as the server: a V2 server (0.1.x)
+  refuses V1 apps (0.0.x), and the app only says "t3-worker is not connected".
+- iPhone: T3 Code app 2.x with Tailscale on; `mac/pair.sh --phone` prints a QR
+  code valid for 15 minutes (app: Settings → Environments → Add environment).
 - Settings → Connections → Load balancing: set t3-worker to **Prefer** and the Mac
   to **Less often** (T3 uses preferences, not numeric weights).
 - Optionally switch off the Mac's local environment so no agents run there.
